@@ -14,7 +14,20 @@ export default function App() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingProfile, setCheckingProfile] = useState(true);
-  const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
+  
+  // Persist activeRoomId in localStorage so reloading the page does not boot the user out of the active room
+  const [activeRoomId, setActiveRoomIdState] = useState<string | null>(() => {
+    return localStorage.getItem("chutegole_active_room_id");
+  });
+
+  const setActiveRoomId = (id: string | null) => {
+    setActiveRoomIdState(id);
+    if (id) {
+      localStorage.setItem("chutegole_active_room_id", id);
+    } else {
+      localStorage.removeItem("chutegole_active_room_id");
+    }
+  };
 
   useEffect(() => {
     // Listen for authentication changes or fallback to local anonymous guest

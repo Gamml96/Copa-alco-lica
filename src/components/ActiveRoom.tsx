@@ -28,8 +28,21 @@ import {
   Award,
   PlusCircle,
   TrendingUp,
+  Clock,
+  Lock,
+  Unlock,
+  Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+
+const FOOTBALL_BET_TEMPLATES = [
+  { label: "⚽ Próximo Gol", title: "Quem faz o próximo gol?", options: "Time da Casa, Visitante, Ninguém", value: 2, duration: 300 },
+  { label: "⏱️ Gol Próximos 5 Min", title: "Vai sair gol nos próximos 5 minutos?", options: "Sim, Não", value: 1, duration: 300 },
+  { label: "🚩 Escanteio", title: "O próximo escanteio será de quem?", options: "Time da Casa, Visitante, Nenhum", value: 1, duration: 125 },
+  { label: "📺 Chamada do VAR", title: "O juiz vai consultar o VAR neste lance?", options: "Sim (Vai ver), Não (Segue o jogo)", value: 2, duration: 180 },
+  { label: "🟨 Cartão", title: "O juiz vai dar cartão amarelo/vermelho nos próximos 3 min?", options: "Sim, Não", value: 1, duration: 180 },
+  { label: "🧤 Defesa de Pênalti", title: "O goleiro vai pegar essa cobrança?", options: "Sim (Pega/Trave), Não (Gol)", value: 3, duration: 60 }
+];
 
 interface ActiveRoomProps {
   roomId: string;
@@ -52,10 +65,28 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
   const [betTitle, setBetTitle] = useState("");
   const [betOptionsString, setBetOptionsString] = useState("Sim, Não");
   const [betValue, setBetValue] = useState(1);
+  const [betDuration, setBetDuration] = useState<number>(0); // Seconds: 0 = No limit, 30, 60, 120, etc.
   const [creatingBet, setCreatingBet] = useState(false);
 
   const [copiedCode, setCopiedCode] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Live countdown timer state (ticks every second)
+  const [now, setNow] = useState<Date>(new Date());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setNow(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const getRemainingCalculatedSecs = (endsAtStr?: string) => {
+    if (!endsAtStr) return null;
+    const endsAt = new Date(endsAtStr);
+    const diff = Math.floor((endsAt.getTime() - now.getTime()) / 1000);
+    return diff > 0 ? diff : 0;
+  };
 
   // Load Room details and subcollections
   useEffect(() => {
@@ -181,6 +212,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
       }
 
       const betId = `bet_${Date.now()}`;
+      const endsAt = betDuration > 0 ? new Date(Date.now() + betDuration * 1000).toISOString() : undefined;
       const newBet: Bet = {
         id: betId,
         roomId,
@@ -191,6 +223,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
         votes: {},
         creatorId: user.uid,
         createdAt: new Date().toISOString(),
+        endsAt,
       };
 
       await setDoc(doc(db, "rooms", roomId, "bets", betId), newBet);
@@ -202,7 +235,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
         userId: "system",
         userName: "Palpiteiro",
         userPhoto: "",
-        text: `🎯 Nova aposta aberta: "${betTitle.trim()}" valendo ${betValue} dose(s)! Façam seus palpites!`,
+        text: `🎯 Nova aposta aberta: "${betTitle.trim()}" valendo ${betValue} dose(s)! Façam seus palpites!${betDuration > 0 ? ` ⏱️ Tempo Limite: ${betDuration >= 60 ? `${Math.floor(betDuration / 60)} min` : `${betDuration} seg`}!` : ""}`,
         type: "system",
         createdAt: new Date().toISOString(),
       };
@@ -211,6 +244,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
       setBetTitle("");
       setBetOptionsString("Sim, Não");
       setBetValue(1);
+      setBetDuration(0);
       setCreatingBet(false);
     } catch (err) {
       console.error(err);
@@ -220,6 +254,18 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
   // Submit a vote (Any player)
   const handleVote = async (betId: string, optionIndex: number) => {
     try {
+      const targetBet = bets.find((b) => b.id === betId);
+      if (targetBet) {
+        if (targetBet.status === "resolved") return;
+        if (targetBet.endsAt) {
+          const secs = getRemainingCalculatedSecs(targetBet.endsAt);
+          if (secs !== null && secs <= 0) {
+            alert("⚠️ Opa! O tempo desse palpite já expirou, aposta bloqueada!");
+            return;
+          }
+        }
+      }
+
       const betRef = doc(db, "rooms", roomId, "bets", betId);
       const voterKey = `votes.${user.uid}`;
       await updateDoc(betRef, {
@@ -536,6 +582,31 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                 </div>
 
                 <form onSubmit={handleCreateBet} className="space-y-4">
+                  {/* Modelos Rápidos */}
+                  <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 space-y-2">
+                    <span className="block text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                      Sugestões de Palpites (Modelos Rápidos):
+                    </span>
+                    <div className="flex gap-2 flex-wrap">
+                      {FOOTBALL_BET_TEMPLATES.map((tmpl, idx) => (
+                        <button
+                          key={`template_${idx}`}
+                          type="button"
+                          onClick={() => {
+                            setBetTitle(tmpl.title);
+                            setBetOptionsString(tmpl.options);
+                            setBetValue(tmpl.value);
+                            setBetDuration(tmpl.duration);
+                          }}
+                          className="bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-400 text-[10px] font-extrabold px-2.5 py-1.5 rounded-lg transition"
+                        >
+                          {tmpl.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
                       O que vai acontecer? (Pergunta do Palpite)
@@ -551,7 +622,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
                         Opções (Separadas por vírgula)
@@ -578,6 +649,24 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                         <option value={2}>2 Doses (Aquecimento)</option>
                         <option value={3}>3 Doses (Brutal! 💥)</option>
                         <option value={5}>5 Doses (Vira-Vira Supremo! 🔥)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                        ⏱️ Tempo Limite para Apostar
+                      </label>
+                      <select
+                        value={betDuration}
+                        onChange={(e) => setBetDuration(parseInt(e.target.value))}
+                        className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-white text-xs outline-none"
+                      >
+                        <option value={0}>Sem limite</option>
+                        <option value={30}>30 segundos</option>
+                        <option value={60}>1 minuto</option>
+                        <option value={120}>2 minutos</option>
+                        <option value={180}>3 minutos</option>
+                        <option value={300}>5 minutos</option>
+                        <option value={600}>10 minutos</option>
                       </select>
                     </div>
                   </div>
@@ -626,9 +715,29 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                           </h4>
                         </div>
                         {bet.status === "open" ? (
-                          <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded font-medium animate-pulse">
-                            Aberto
-                          </span>
+                          <div className="flex flex-col items-end gap-1">
+                            {bet.endsAt ? (() => {
+                              const secs = getRemainingCalculatedSecs(bet.endsAt);
+                              if (secs !== null && secs <= 0) {
+                                return (
+                                  <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded font-extrabold flex items-center gap-1">
+                                    <Lock className="w-3 h-3 text-red-400" /> Encerrado
+                                  </span>
+                                );
+                              }
+                              const m = Math.floor((secs || 0) / 60);
+                              const s = (secs || 0) % 60;
+                              return (
+                                <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-black flex items-center gap-1 font-mono animate-pulse">
+                                  <Clock className="w-3 h-3 text-amber-400 animate-spin" /> {m}:{s < 10 ? `0${s}` : s}
+                                </span>
+                              );
+                            })() : (
+                              <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded font-medium animate-pulse">
+                                Aberto
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded font-medium">
                             Resolvido
@@ -649,17 +758,23 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                           const isSelected = myVote === index;
                           const isWinner = bet.status === "resolved" && bet.winnerOption === index;
 
+                          const secs = getRemainingCalculatedSecs(bet.endsAt);
+                          const isExpired = bet.status === "open" && secs !== null && secs <= 0;
+                          const isDisabled = bet.status === "resolved" || isExpired;
+
                           return (
                             <button
                               key={`${bet.id}_opt_${index}`}
-                              disabled={bet.status === "resolved"}
+                              disabled={isDisabled}
                               onClick={() => handleVote(bet.id, index)}
-                              className={`relative overflow-hidden w-full text-left p-3 rounded-xl border text-xs font-medium cursor-pointer transition flex items-center justify-between ${
+                              className={`relative overflow-hidden w-full text-left p-3 rounded-xl border text-xs font-medium transition flex items-center justify-between ${
                                 isWinner
                                   ? "bg-amber-500/10 border-amber-400 text-amber-400 font-bold"
                                   : isSelected
                                   ? "bg-emerald-950 border-emerald-500 text-emerald-400 font-bold"
-                                  : "bg-slate-900 border-transparent text-slate-300 hover:bg-slate-900/80"
+                                  : isExpired
+                                  ? "bg-slate-950/40 border-dashed border-slate-900 text-slate-600 cursor-not-allowed"
+                                  : "bg-slate-900 border-transparent text-slate-300 hover:bg-slate-900/80 cursor-pointer"
                               }`}
                             >
                               {/* Background progress fill overlay */}
@@ -672,11 +787,14 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                                 {isSelected && (
                                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                                 )}
+                                {isExpired && !isSelected && (
+                                  <Lock className="w-3 h-3 text-slate-600" />
+                                )}
                                 <span>{option}</span>
                               </div>
 
-                              <span className="text-[10px] text-slate-500">
-                                {optionVotes} votos ({pct}%)
+                              <span className="text-[10px] text-slate-500 font-mono">
+                                {optionVotes} {optionVotes === 1 ? 'voto' : 'votos'} ({pct}%)
                               </span>
                             </button>
                           );

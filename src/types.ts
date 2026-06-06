@@ -37,6 +37,7 @@ export interface Bet {
   winnerOption?: number;
   creatorId: string;
   createdAt: string;
+  endsAt?: string; // Optional limits for real-time guessing
 }
 
 export interface Message {
