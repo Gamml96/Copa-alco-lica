@@ -133,7 +133,10 @@ export default function App() {
           <ProfileSetup
             userId={user.uid}
             defaultName={user.displayName || ""}
-            onComplete={() => setCheckingProfile(false)}
+            onComplete={(newProfile) => {
+              setProfile(newProfile);
+              setCheckingProfile(false);
+            }}
           />
         ) : activeRoomId ? (
           <ActiveRoom

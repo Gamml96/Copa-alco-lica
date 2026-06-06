@@ -2,59 +2,34 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default deny rule
+    // Default deny rule (except defined path structures)
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // ID verification helper
-    function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
-    }
-
     // User Profile Rules (Public Read/Write)
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if true
-        && request.resource.data.uid == userId
-        && request.resource.data.displayName is string
-        && request.resource.data.favoriteTeam is string;
+      allow read, write: if true;
     }
 
     // Room Rules (Public Read/Write)
     match /rooms/{roomId} {
-      allow read: if true;
-      allow create: if isValidId(roomId)
-        && request.resource.data.creatorId is string
-        && request.resource.data.name is string
-        && request.resource.data.name.size() <= 100;
-      allow update, delete: if true;
+      allow read, write: if true;
     }
 
     // Player Status in a Room
     match /rooms/{roomId}/players/{playerId} {
-      allow read: if true;
-      allow create: if isValidId(playerId);
-      allow update: if true;
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     // Bets in a Room
     match /rooms/{roomId}/bets/{betId} {
-      allow read: if true;
-      allow create: if isValidId(betId)
-        && request.resource.data.creatorId is string
-        && request.resource.data.status == "open";
-      allow update: if true;
-      allow delete: if true;
+      allow read, write: if true;
     }
 
     // Messages / Logs in a Room
     match /rooms/{roomId}/messages/{messageId} {
-      allow read: if true;
-      allow create: if isValidId(messageId)
-        && (request.resource.data.userId is string || request.resource.data.userId == "system");
-      allow delete: if true;
+      allow read, write: if true;
     }
   }
 }

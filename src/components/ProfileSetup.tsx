@@ -8,7 +8,7 @@ import { motion } from "motion/react";
 interface ProfileSetupProps {
   userId: string;
   defaultName: string;
-  onComplete: () => void;
+  onComplete: (profile: UserProfile) => void;
 }
 
 const COMMON_TEAMS = [
@@ -57,12 +57,12 @@ export default function ProfileSetup({ userId, defaultName, onComplete }: Profil
         createdAt: new Date().toISOString()
       };
 
-      const path = `users/${userId}`;
       await setDoc(doc(db, "users", userId), newUser);
-      onComplete();
+      onComplete(newUser);
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${userId}`);
-      setError("Erro ao salvar o perfil. Tente novamente.");
+      console.error("Erro completo ao salvar perfil:", err);
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(`Erro ao salvar o perfil: ${errorMessage}. Se o erro persistir, verifique sua conexão ou recarregue a aba.`);
     } finally {
       setLoading(false);
     }
