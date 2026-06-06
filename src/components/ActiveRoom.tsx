@@ -75,6 +75,29 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
 
   // Live countdown timer state (ticks every second)
   const [now, setNow] = useState<Date>(new Date());
+  const [clockOffset, setClockOffset] = useState<number>(0);
+
+  // Sincroniza o relógio do cliente com o servidor para corrigir qualquer diferença/drift de hora
+  useEffect(() => {
+    const syncClock = async () => {
+      try {
+        const start = Date.now();
+        const resp = await fetch("/index.html", { method: "GET", cache: "no-store" });
+        const dateHeader = resp.headers.get("Date");
+        if (dateHeader) {
+          const serverTime = new Date(dateHeader).getTime();
+          const latency = (Date.now() - start) / 2;
+          const adjustedServerTime = serverTime + latency;
+          const offset = adjustedServerTime - Date.now();
+          setClockOffset(offset);
+          console.log(`[ClockSync] Relógio sincronizado com o servidor. Offset: ${offset}ms.`);
+        }
+      } catch (err) {
+        console.warn("[ClockSync] Falha ao sincronizar relógio com servidor, usando hora local:", err);
+      }
+    };
+    syncClock();
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -86,7 +109,8 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
   const getRemainingCalculatedSecs = (endsAtStr?: string) => {
     if (!endsAtStr) return null;
     const endsAt = new Date(endsAtStr);
-    const diff = Math.floor((endsAt.getTime() - now.getTime()) / 1000);
+    const syncedNowTime = now.getTime() + clockOffset;
+    const diff = Math.floor((endsAt.getTime() - syncedNowTime) / 1000);
     return diff > 0 ? diff : 0;
   };
 
@@ -110,12 +134,38 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
       collection(db, "rooms", roomId, "players"),
       (snapshot) => {
         const list: Player[] = [];
+        let foundMe = false;
         snapshot.forEach((pSnap) => {
-          list.push(pSnap.data() as Player);
+          const p = pSnap.data() as Player;
+          list.push(p);
+          if (p.userId === user.uid) {
+            foundMe = true;
+          }
         });
         // Sort players by dosesDrunk descending, or those who owe stats
         const sorted = list.sort((a, b) => b.dosesDrunk - a.dosesDrunk || b.dosesOwed - a.dosesOwed);
         setPlayers(sorted);
+
+        // Garante que o jogador atual está cadastrado na subcoleção de jogadores (ex: após recarregar a página)
+        if (!foundMe && user && user.uid) {
+          const autoEnlist = async () => {
+            const playerRecord: Player = {
+              userId: user.uid,
+              displayName: user.displayName,
+              photoURL: user.photoURL,
+              favoriteTeam: user.favoriteTeam,
+              dosesOwed: 0,
+              dosesDrunk: 0,
+              updatedAt: new Date().toISOString(),
+            };
+            try {
+              await setDoc(doc(db, "rooms", roomId, "players", user.uid), playerRecord);
+            } catch (e) {
+              console.error("Auto enlist failed", e);
+            }
+          };
+          autoEnlist();
+        }
       },
       (err) => handleFirestoreError(err, OperationType.GET, `rooms/${roomId}/players`)
     );
@@ -214,7 +264,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
       }
 
       const betId = `bet_${Date.now()}`;
-      const endsAt = betDuration > 0 ? new Date(Date.now() + betDuration * 1000).toISOString() : undefined;
+      const endsAt = betDuration > 0 ? new Date((Date.now() + clockOffset) + betDuration * 1000).toISOString() : undefined;
       const newBet: Bet = {
         id: betId,
         roomId,
