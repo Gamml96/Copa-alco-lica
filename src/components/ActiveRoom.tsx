@@ -32,6 +32,8 @@ import {
   Lock,
   Unlock,
   Sparkles,
+  Trash2,
+  LogOut,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -419,6 +421,49 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
     }
   };
 
+  const [confirmingAction, setConfirmingAction] = useState<"leave" | "delete" | null>(null);
+
+  // Leave active room
+  const handleLeaveRoom = async () => {
+    try {
+      // Remove registration in players list
+      const playerRef = doc(db, "rooms", roomId, "players", user.uid);
+      await deleteDoc(playerRef);
+
+      // Post in chat that user left
+      const leaveMsgId = `msg_leave_${Date.now()}`;
+      const leaveMsg: Message = {
+        id: leaveMsgId,
+        roomId,
+        userId: "system",
+        userName: "Portão do Boteco 🚪",
+        userPhoto: "",
+        text: `🚪 ${user.displayName} saiu do grupo e abandonou a mesa!`,
+        type: "system",
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, "rooms", roomId, "messages", leaveMsgId), leaveMsg);
+
+      // Clean storage and go back
+      localStorage.removeItem("chutegole_active_room_id");
+      onBack();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Delete active room entirely
+  const handleDeleteRoom = async () => {
+    try {
+      // Delete the room document. The snapshot listener in App.tsx or inside ActiveRoom detects this deletion and boots everyone.
+      await deleteDoc(doc(db, "rooms", roomId));
+      localStorage.removeItem("chutegole_active_room_id");
+      onBack();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const isCreator = room?.creatorId === user.uid;
   const myPlayerInfo = players.find((p) => p.userId === user.uid);
 
@@ -498,6 +543,55 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
             >
               Alterar Placar
             </button>
+          )}
+        </div>
+
+        {/* Room Actions / Management */}
+        <div className="w-full md:w-auto shrink-0 flex flex-col md:items-end gap-1.5 min-w-[200px]">
+          {confirmingAction === null ? (
+            <div className="flex gap-2 w-full md:justify-end">
+              {isCreator ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingAction("delete")}
+                  className="w-full md:w-auto px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/20 text-rose-400 hover:text-rose-300 text-xs font-bold rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer animate-fade-in"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Excluir Grupo</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingAction("leave")}
+                  className="w-full md:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Sair do Grupo</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="bg-slate-950/80 border border-rose-500/20 rounded-2xl p-2 px-3 w-full flex flex-col gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-rose-400 text-center">
+                {confirmingAction === "delete" ? "⚠️ Excluir permanentemente?" : "🚪 Tem certeza que deseja sair?"}
+              </span>
+              <div className="flex gap-1.5 justify-center">
+                <button
+                  type="button"
+                  onClick={confirmingAction === "delete" ? handleDeleteRoom : handleLeaveRoom}
+                  className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 hover:scale-103 text-white text-[10px] font-black rounded-lg transition cursor-pointer"
+                >
+                  Confirmar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingAction(null)}
+                  className="px-3 py-1.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 text-[10px] font-bold rounded-lg transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
