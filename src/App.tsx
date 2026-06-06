@@ -17,14 +17,23 @@ export default function App() {
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
 
   useEffect(() => {
-    // Listen for authentication changes
+    // Listen for authentication changes or fallback to local anonymous guest
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      setLoading(false);
-      
-      if (!firebaseUser) {
-        setProfile(null);
-        setCheckingProfile(false);
+      if (firebaseUser) {
+        setUser(firebaseUser);
+        setLoading(false);
+      } else {
+        // If not authenticated via Firebase, auto-assign a persistent local guest UID
+        let localUid = localStorage.getItem("chutegole_local_uid");
+        if (!localUid) {
+          localUid = "guest_" + Math.random().toString(36).substring(2, 11);
+          localStorage.setItem("chutegole_local_uid", localUid);
+        }
+        setUser({
+          uid: localUid,
+          displayName: ""
+        } as User);
+        setLoading(false);
       }
     });
 
@@ -62,6 +71,7 @@ export default function App() {
   const handleLogout = async () => {
     try {
       setActiveRoomId(null);
+      localStorage.removeItem("chutegole_local_uid");
       await logout();
     } catch (error) {
       console.error(error);

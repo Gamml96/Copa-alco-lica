@@ -7,65 +7,54 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // Auth Helper
-    function isSignedIn() {
-      return request.auth != null;
-    }
-
     // ID verification helper
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
-    // User Profile Rules
+    // User Profile Rules (Public Read/Write)
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create, update: if isSignedIn() && request.auth.uid == userId
+      allow read: if true;
+      allow create, update: if true
         && request.resource.data.uid == userId
         && request.resource.data.displayName is string
         && request.resource.data.favoriteTeam is string;
     }
 
-    // Room Rules
+    // Room Rules (Public Read/Write)
     match /rooms/{roomId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(roomId)
-        && request.resource.data.creatorId == request.auth.uid
+      allow read: if true;
+      allow create: if isValidId(roomId)
+        && request.resource.data.creatorId is string
         && request.resource.data.name is string
         && request.resource.data.name.size() <= 100;
-      allow update, delete: if isSignedIn()
-        && (resource.data.creatorId == request.auth.uid || request.resource.data.creatorId == resource.data.creatorId);
+      allow update, delete: if true;
     }
 
     // Player Status in a Room
     match /rooms/{roomId}/players/{playerId} {
-      allow read: if isSignedIn();
-      // Allow players to register in a room, or room creators to manage members
-      allow create: if isSignedIn() && isValidId(playerId)
-        && (playerId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.creatorId == request.auth.uid);
-      // Allow players to update their own stats (e.g. dosesDrunk) or other players/creators to update stats when a bet resolves
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn()
-        && (playerId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.creatorId == request.auth.uid);
+      allow read: if true;
+      allow create: if isValidId(playerId);
+      allow update: if true;
+      allow delete: if true;
     }
 
     // Bets in a Room
     match /rooms/{roomId}/bets/{betId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(betId)
-        && request.resource.data.creatorId == request.auth.uid
+      allow read: if true;
+      allow create: if isValidId(betId)
+        && request.resource.data.creatorId is string
         && request.resource.data.status == "open";
-      // Allow updating of votes (by players) or status/winners (by creator)
-      allow update: if isSignedIn();
-      allow delete: if isSignedIn() && resource.data.creatorId == request.auth.uid;
+      allow update: if true;
+      allow delete: if true;
     }
 
     // Messages / Logs in a Room
     match /rooms/{roomId}/messages/{messageId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(messageId)
-        && (request.resource.data.userId == request.auth.uid || request.resource.data.userId == "system");
-      allow delete: if isSignedIn() && (resource.data.userId == request.auth.uid || get(/databases/$(database)/documents/rooms/$(roomId)).data.creatorId == request.auth.uid);
+      allow read: if true;
+      allow create: if isValidId(messageId)
+        && (request.resource.data.userId is string || request.resource.data.userId == "system");
+      allow delete: if true;
     }
   }
 }
