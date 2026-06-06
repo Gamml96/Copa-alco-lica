@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account information and metrics",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "favoriteTeam": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "displayName", "photoURL", "favoriteTeam", "createdAt"]
+    },
+    "Room": {
+      "title": "Betting Room",
+      "description": "A group lobby where friends bet together",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "code": { "type": "string" },
+        "currentMatch": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "creatorId", "creatorName", "code", "createdAt"]
+    },
+    "Player": {
+      "title": "Room Player Status",
+      "description": "A participant in a betting room tracking shot history",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "favoriteTeam": { "type": "string" },
+        "dosesOwed": { "type": "integer" },
+        "dosesDrunk": { "type": "integer" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "displayName", "photoURL", "favoriteTeam", "dosesOwed", "dosesDrunk", "updatedAt"]
+    },
+    "Bet": {
+      "title": "Room Bet Event",
+      "description": "An active prediction bet inside a room",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roomId": { "type": "string" },
+        "title": { "type": "string" },
+        "options": { "type": "array" },
+        "betValue": { "type": "integer" },
+        "status": { "type": "string", "enum": ["open", "resolved"] },
+        "votes": { "type": "object" },
+        "winnerOption": { "type": "integer" },
+        "creatorId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "roomId", "title", "options", "betValue", "status", "votes", "creatorId", "createdAt"]
+    },
+    "Message": {
+      "title": "Room Chat Message",
+      "description": "Group chat banter or drink cheering log in the lobby",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "roomId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "text": { "type": "string" },
+        "type": { "type": "string", "enum": ["chat", "drinking"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "roomId", "userId", "userName", "userPhoto", "text", "type", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Global user profiles"
+    },
+    "/rooms/{roomId}": {
+      "schema": "Room",
+      "description": "Betting lobbies"
+    },
+    "/rooms/{roomId}/players/{playerId}": {
+      "schema": "Player",
+      "description": "Active players and their drink tallies inside a lobby"
+    },
+    "/rooms/{roomId}/bets/{betId}": {
+      "schema": "Bet",
+      "description": "Prediction pools inside a lobby"
+    },
+    "/rooms/{roomId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "Real-time group messages and shot logging inside a lobby"
+    }
+  }
+}
