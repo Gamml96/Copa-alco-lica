@@ -60,7 +60,11 @@ export default function LobbiesHub({ user, onJoinRoom }: LobbiesHubProps) {
       };
 
       // Create room document
-      await setDoc(doc(db, "rooms", roomId), newRoom);
+      try {
+        await setDoc(doc(db, "rooms", roomId), newRoom);
+      } catch (err: any) {
+        handleFirestoreError(err, OperationType.WRITE, `rooms/${roomId} (Create Room Doc)`);
+      }
 
       // Register creator as first player
       const initialPlayer: Player = {
@@ -72,7 +76,11 @@ export default function LobbiesHub({ user, onJoinRoom }: LobbiesHubProps) {
         dosesDrunk: 0,
         updatedAt: new Date().toISOString(),
       };
-      await setDoc(doc(db, "rooms", roomId, "players", user.uid), initialPlayer);
+      try {
+        await setDoc(doc(db, "rooms", roomId, "players", user.uid), initialPlayer);
+      } catch (err: any) {
+        handleFirestoreError(err, OperationType.WRITE, `rooms/${roomId}/players/${user.uid} (Create Player Doc)`);
+      }
 
       // Welcome system message
       const welcomeMsg = {
@@ -85,11 +93,14 @@ export default function LobbiesHub({ user, onJoinRoom }: LobbiesHubProps) {
         type: "system",
         createdAt: new Date().toISOString(),
       };
-      await setDoc(doc(db, "rooms", roomId, "messages", welcomeMsg.id), welcomeMsg);
+      try {
+        await setDoc(doc(db, "rooms", roomId, "messages", welcomeMsg.id), welcomeMsg);
+      } catch (err: any) {
+        handleFirestoreError(err, OperationType.WRITE, `rooms/${roomId}/messages/${welcomeMsg.id} (Create Welcome Message)`);
+      }
 
       onJoinRoom(roomId);
     } catch (err: any) {
-      handleFirestoreError(err, OperationType.WRITE, `rooms`);
       setError("Erro ao criar o boteco. Tente novamente.");
     } finally {
       setLoading(false);
