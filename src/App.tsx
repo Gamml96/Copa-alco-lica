@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
-import { auth, db, logout } from "./firebase";
+import { auth, db, logout, testConnection } from "./firebase";
 import { UserProfile } from "./types";
 import AuthScreen from "./components/AuthScreen";
 import ProfileSetup from "./components/ProfileSetup";
@@ -30,6 +30,9 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Validate Firestore connection on boot
+    testConnection();
+
     // Listen for authentication changes correctly
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);

@@ -7,6 +7,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Connection test document
+    match /test/connection {
+      allow read: if true;
+    }
+
     // User Profile Rules (Public Read/Write)
     match /users/{userId} {
       allow read, write: if true;

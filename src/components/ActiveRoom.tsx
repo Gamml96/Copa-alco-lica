@@ -607,7 +607,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                   className="w-full md:w-auto px-4 py-2.5 bg-rose-500/10 hover:bg-rose-500/25 border border-rose-500/20 text-rose-400 hover:text-rose-300 text-xs font-bold rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer animate-fade-in"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Excluir Grupo</span>
+                  <span>Excluir Boteco</span>
                 </button>
               ) : (
                 <button
@@ -616,14 +616,14 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                   className="w-full md:w-auto px-4 py-2.5 bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold rounded-2xl transition flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Sair do Grupo</span>
+                  <span>Sair do Boteco</span>
                 </button>
               )}
             </div>
           ) : (
             <div className="bg-slate-950/80 border border-rose-500/20 rounded-2xl p-2 px-3 w-full flex flex-col gap-2">
               <span className="text-[10px] font-black uppercase tracking-wider text-rose-400 text-center">
-                {confirmingAction === "delete" ? "⚠️ Excluir permanentemente?" : "🚪 Tem certeza que deseja sair?"}
+                {confirmingAction === "delete" ? "⚠️ Cancelar e Excluir Boteco?" : "🚪 Tem certeza que deseja sair?"}
               </span>
               <div className="flex gap-1.5 justify-center">
                 <button

@@ -1,8 +1,8 @@
 import { useState, useEffect, FormEvent } from "react";
-import { collection, doc, setDoc, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { collection, doc, setDoc, getDocs, query, orderBy, limit, deleteDoc } from "firebase/firestore";
 import { db, handleFirestoreError, OperationType } from "../firebase";
 import { Room, UserProfile, Player } from "../types";
-import { Beer, Plus, LogIn, Users, PlusCircle, Search, Trophy } from "lucide-react";
+import { Beer, Plus, LogIn, Users, PlusCircle, Search, Trophy, Trash2 } from "lucide-react";
 import { motion } from "motion/react";
 
 interface LobbiesHubProps {
@@ -16,6 +16,9 @@ export default function LobbiesHub({ user, onJoinRoom }: LobbiesHubProps) {
   const [inviteCode, setInviteCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDeleteRoomId, setConfirmDeleteRoomId] = useState<string | null>(null);
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Load active rooms for global feed
   const fetchRooms = async () => {
@@ -189,6 +192,80 @@ export default function LobbiesHub({ user, onJoinRoom }: LobbiesHubProps) {
     }
   };
 
+  const handleDeleteRoom = async (roomId: string) => {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await deleteDoc(doc(db, "rooms", roomId));
+      setConfirmDeleteRoomId(null);
+      await fetchRooms(); // Refresh list
+    } catch (err: any) {
+      console.error("Erro ao excluir boteco:", err);
+      setError("Não conseguimos excluir o boteco. Erro de permissão.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAllRooms = async () => {
+    if (loading) return;
+    setLoading(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const querySnapshot = await getDocs(collection(db, "rooms"));
+      let deleteCount = 0;
+
+      for (const roomDoc of querySnapshot.docs) {
+        const roomId = roomDoc.id;
+
+        // 1. Delete players
+        try {
+          const playersSnap = await getDocs(collection(db, "rooms", roomId, "players"));
+          for (const pDoc of playersSnap.docs) {
+            await deleteDoc(doc(db, "rooms", roomId, "players", pDoc.id));
+          }
+        } catch (e) {
+          console.error("Erro ao limpar jogadores do boteco", roomId, e);
+        }
+
+        // 2. Delete messages
+        try {
+          const messagesSnap = await getDocs(collection(db, "rooms", roomId, "messages"));
+          for (const mDoc of messagesSnap.docs) {
+            await deleteDoc(doc(db, "rooms", roomId, "messages", mDoc.id));
+          }
+        } catch (e) {
+          console.error("Erro ao limpar mensagens do boteco", roomId, e);
+        }
+
+        // 3. Delete bets
+        try {
+          const betsSnap = await getDocs(collection(db, "rooms", roomId, "bets"));
+          for (const bDoc of betsSnap.docs) {
+            await deleteDoc(doc(db, "rooms", roomId, "bets", bDoc.id));
+          }
+        } catch (e) {
+          console.error("Erro ao limpar palpites do boteco", roomId, e);
+        }
+
+        // 4. Delete the room itself
+        await deleteDoc(doc(db, "rooms", roomId));
+        deleteCount++;
+      }
+
+      setConfirmDeleteAll(false);
+      await fetchRooms(); // Refresh lists
+      setSuccessMessage(`Rodada resetada com sucesso! ${deleteCount} boteco(s) excluído(s) da base.`);
+    } catch (err: any) {
+      console.error("Erro ao resetar os quadros:", err);
+      setError("Erro ao resetar os botecos. Certifique-se de estar conectado à internet.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-8 relative">
       {/* Welcome Banner */}
@@ -213,6 +290,18 @@ export default function LobbiesHub({ user, onJoinRoom }: LobbiesHubProps) {
       {error && (
         <div className="mb-6 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm rounded-2xl">
           {error}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm rounded-2xl flex justify-between items-center animate-fade-in">
+          <span>{successMessage}</span>
+          <button 
+            onClick={() => setSuccessMessage(null)} 
+            className="text-xs text-slate-400 hover:text-white ml-2 font-bold focus:outline-none cursor-pointer"
+          >
+            ✕
+          </button>
         </div>
       )}
 
@@ -287,14 +376,50 @@ export default function LobbiesHub({ user, onJoinRoom }: LobbiesHubProps) {
         {/* Right column: Active lobbies board list */}
         <div className="lg:col-span-2">
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-md min-h-[400px]">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800/60">
               <div className="flex items-center gap-3">
                 <Users className="w-5 h-5 text-amber-400" />
                 <h2 className="text-lg font-bold text-white">Quadro de Botecos Ativos</h2>
               </div>
-              <span className="text-[10px] bg-slate-950 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-full animate-pulse">
-                Ao Vivo 🟢
-              </span>
+              <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                {/* Reset button with double-confirmation */}
+                {confirmDeleteAll ? (
+                  <div className="flex items-center gap-1.5 bg-rose-500/10 p-1 px-2.5 rounded-xl border border-rose-500/25">
+                    <span className="text-[10px] text-rose-450 font-black uppercase tracking-wider">Limpar tudo?</span>
+                    <button
+                      onClick={handleDeleteAllRooms}
+                      disabled={loading}
+                      className="text-[10px] bg-rose-600 hover:bg-rose-700 text-white font-extrabold px-2.5 py-1 rounded-lg transition cursor-pointer"
+                    >
+                      {loading ? "Excluindo..." : "Sim, Deletar!"}
+                    </button>
+                    <button
+                      onClick={() => setConfirmDeleteAll(false)}
+                      disabled={loading}
+                      className="text-[10px] bg-slate-800 hover:bg-slate-755 text-slate-300 font-bold px-2 py-1 rounded-lg transition cursor-pointer"
+                    >
+                      Não
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setConfirmDeleteAll(true);
+                      setSuccessMessage(null);
+                      setError(null);
+                    }}
+                    className="text-[10px] bg-slate-950 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 border border-slate-800 hover:border-rose-500/20 font-bold py-1.5 px-3 rounded-xl transition cursor-pointer flex items-center gap-1.5"
+                    title="Excluir todos os botecos da base de dados"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                    <span>Resetar Todos os Botecos</span>
+                  </button>
+                )}
+                
+                <span className="text-[10px] bg-slate-950 border border-slate-800 text-slate-400 px-2.5 py-1 rounded-full animate-pulse shrink-0">
+                  Ao Vivo 🟢
+                </span>
+              </div>
             </div>
 
             {rooms.length === 0 ? (
@@ -329,16 +454,56 @@ export default function LobbiesHub({ user, onJoinRoom }: LobbiesHubProps) {
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-800/40">
-                      <span className="text-[10px] text-slate-500">
-                        Por: {room.creatorName}
-                      </span>
-                      <button
-                        onClick={() => handleJoinDirect(room)}
-                        className="text-xs bg-emerald-950 text-emerald-400 hover:bg-emerald-400 hover:text-slate-950 font-bold py-1.5 px-3 rounded-lg transition"
-                      >
-                        Entrar Rápido →
-                      </button>
+                    <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-slate-800/40">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-slate-500 truncate max-w-[120px]" title={`Criado por: ${room.creatorName}`}>
+                          Por: {room.creatorId === user.uid ? "Você 👑" : room.creatorName}
+                        </span>
+
+                        {room.creatorId === user.uid ? (
+                          confirmDeleteRoomId === room.id ? (
+                            <div className="flex items-center gap-1.5 shrink-0 bg-rose-500/10 p-1 px-2 rounded-xl border border-rose-500/20">
+                              <span className="text-[10px] text-rose-400 font-bold">Excluir?</span>
+                              <button
+                                onClick={() => handleDeleteRoom(room.id)}
+                                className="text-[10px] bg-rose-600 hover:bg-rose-700 text-white font-extrabold px-2 py-0.5 rounded transition cursor-pointer"
+                              >
+                                Sim
+                              </button>
+                              <button
+                                onClick={() => setConfirmDeleteRoomId(null)}
+                                className="text-[10px] bg-slate-800 hover:bg-slate-750 text-slate-300 font-bold px-2 py-0.5 rounded transition cursor-pointer"
+                              >
+                                Não
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex gap-1.5 items-center shrink-0">
+                              <button
+                                onClick={() => setConfirmDeleteRoomId(room.id)}
+                                className="text-[10px] bg-rose-950/60 text-rose-400 hover:bg-rose-600 hover:text-white border border-rose-500/20 hover:border-transparent font-bold py-1.5 px-2.5 rounded-lg transition cursor-pointer flex items-center gap-1"
+                                title="Cancelar e excluir esse boteco"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Cancelar Boteco</span>
+                              </button>
+                              <button
+                                onClick={() => handleJoinDirect(room)}
+                                className="text-xs bg-emerald-950 hover:bg-emerald-450 hover:text-slate-950 text-emerald-450 font-bold py-1.5 px-3 rounded-lg transition cursor-pointer"
+                              >
+                                Entrar →
+                              </button>
+                            </div>
+                          )
+                        ) : (
+                          <button
+                            onClick={() => handleJoinDirect(room)}
+                            className="text-xs bg-emerald-950 hover:bg-emerald-450 hover:text-slate-950 text-emerald-450 font-bold py-1.5 px-3 rounded-lg transition cursor-pointer"
+                          >
+                            Entrar Rápido →
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </motion.div>
                 ))}
