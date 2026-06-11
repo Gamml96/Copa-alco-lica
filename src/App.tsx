@@ -30,24 +30,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Listen for authentication changes or fallback to local anonymous guest
+    // Listen for authentication changes correctly
     const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        setLoading(false);
-      } else {
-        // If not authenticated via Firebase, auto-assign a persistent local guest UID
-        let localUid = localStorage.getItem("chutegole_local_uid");
-        if (!localUid) {
-          localUid = "guest_" + Math.random().toString(36).substring(2, 11);
-          localStorage.setItem("chutegole_local_uid", localUid);
-        }
-        setUser({
-          uid: localUid,
-          displayName: ""
-        } as User);
-        setLoading(false);
-      }
+      setUser(firebaseUser);
+      setLoading(false);
     });
 
     return () => unsubscribeAuth();

@@ -1,12 +1,34 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously, signOut } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously, signOut, signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
 import { getFirestore, doc, getDocFromServer } from "firebase/firestore";
 import firebaseConfig from "../firebase-applet-config.json";
 
 const app = initializeApp(firebaseConfig);
+export const firebaseProjectId = firebaseConfig.projectId;
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId); /* CRITICAL: The app will break without this line */
 export const auth = getAuth();
 export const googleProvider = new GoogleAuthProvider();
+
+// Email & Password login / registration helper functions
+export const loginWithEmailAndPassword = async (email: string, pass: string) => {
+  try {
+    const result = await signInWithEmailAndPassword(auth, email, pass);
+    return result.user;
+  } catch (error) {
+    console.error("Erro no login com e-mail e senha:", error);
+    throw error;
+  }
+};
+
+export const registerWithEmailAndPassword = async (email: string, pass: string) => {
+  try {
+    const result = await createUserWithEmailAndPassword(auth, email, pass);
+    return result.user;
+  } catch (error) {
+    console.error("Erro no registro com e-mail e senha:", error);
+    throw error;
+  }
+};
 
 // Standard login popup setup
 export const loginWithGoogle = async () => {
