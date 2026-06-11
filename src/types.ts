@@ -36,6 +36,7 @@ export interface Bet {
   votes: Record<string, number>; // Maps userId -> selected option index
   winnerOption?: number;
   creatorId: string;
+  creatorName?: string; // Name of who opened the bet
   createdAt: string;
   endsAt?: string; // Optional limits for real-time guessing
 }

@@ -247,7 +247,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
     }
   };
 
-  // Submit new bet (Creator only)
+  // Submit new bet (Any player inside the room can create)
   const handleCreateBet = async (e: FormEvent) => {
     e.preventDefault();
     if (!betTitle.trim()) return;
@@ -274,6 +274,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
         status: "open",
         votes: {},
         creatorId: user.uid,
+        creatorName: user.displayName,
         createdAt: new Date().toISOString(),
         endsAt,
       };
@@ -285,9 +286,9 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
         id: `msg_sys_bet_${Date.now()}`,
         roomId,
         userId: "system",
-        userName: "Palpiteiro",
+        userName: "Palpiteiro 🎯",
         userPhoto: "",
-        text: `🎯 Nova aposta aberta: "${betTitle.trim()}" valendo ${betValue} dose(s)! Façam seus palpites!${betDuration > 0 ? ` ⏱️ Tempo Limite: ${betDuration >= 60 ? `${Math.floor(betDuration / 60)} min` : `${betDuration} seg`}!` : ""}`,
+        text: `🎯 Nova aposta aberta por ${user.displayName}: "${betTitle.trim()}" valendo ${betValue} dose(s)! Façam seus palpites!${betDuration > 0 ? ` ⏱️ Tempo Limite: ${betDuration >= 60 ? `${Math.floor(betDuration / 60)} min` : `${betDuration} seg`}!` : ""}`,
         type: "system",
         createdAt: new Date().toISOString(),
       };
@@ -300,6 +301,35 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
       setCreatingBet(false);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  // Lock a bet early (Lock guessing / freeze votes)
+  const handleLockBet = async (betId: string) => {
+    try {
+      const targetBet = bets.find((b) => b.id === betId);
+      if (!targetBet) return;
+
+      const betRef = doc(db, "rooms", roomId, "bets", betId);
+      // We set endsAt to the current timestamp to freeze voting immediately
+      await updateDoc(betRef, {
+        endsAt: new Date().toISOString(),
+      });
+
+      // System notification
+      const alertMsg: Message = {
+        id: `msg_sys_lock_${Date.now()}`,
+        roomId,
+        userId: "system",
+        userName: "Prefeito do Gole 🚩",
+        userPhoto: "",
+        text: `🔒 Palpites bloqueados antecipadamente por ${user.displayName} para: "${targetBet.title}". Ninguém mais pode votar! Aguardando resultado do lance...`,
+        type: "system",
+        createdAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, "rooms", roomId, "messages", alertMsg.id), alertMsg);
+    } catch (err) {
+      console.error("Lock bet failed", err);
     }
   };
 
@@ -689,50 +719,63 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
 
           {/* Active Bets Section */}
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-md">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-800/60">
               <div className="flex items-center gap-2.5">
                 <Trophy className="w-5 h-5 text-amber-400" />
-                <h3 className="text-lg font-bold text-white">Palpites em Aberto</h3>
+                <div>
+                  <h3 className="text-base font-bold text-white">Palpites Ativos da Mesa</h3>
+                  <p className="text-[10px] text-slate-400">Todos os amigos podem lançar e votar em tempo real!</p>
+                </div>
               </div>
-              {isCreator && !creatingBet && (
+              {!creatingBet && (
                 <button
                   onClick={() => setCreatingBet(true)}
-                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold py-1.5 px-3 rounded-lg text-xs flex items-center gap-1 cursor-pointer transition"
+                  className="bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-500 hover:to-teal-600 text-slate-950 font-black py-2 px-4 rounded-xl text-xs flex items-center gap-1.5 transition duration-200 cursor-pointer shadow-md shadow-emerald-500/10 active:scale-97 self-start sm:self-auto"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-4 h-4 text-slate-950 stroke-[3px]" />
                   <span>Novo Palpite</span>
                 </button>
               )}
             </div>
 
-            {/* Create Bet Modal Block */}
+            {/* Create Bet Modal Block - VISUALLY ENHANCED */}
             {creatingBet && (
               <motion.div
-                initial={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -12 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-slate-950 border border-emerald-500/20 rounded-2xl p-5 mb-6 space-y-4 shadow-inner"
+                className="bg-slate-950 border border-emerald-500/30 rounded-2xl p-5 mb-8 space-y-5 shadow-2xl relative overflow-hidden"
               >
-                <div className="flex justify-between items-center pb-3 border-b border-slate-800">
-                  <h4 className="text-sm font-bold text-emerald-400 flex items-center gap-1.5">
-                    <PlusCircle className="w-4 h-4" />
-                    Criar Aposta pra Galera
-                  </h4>
+                {/* Visual decoration overlay */}
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-500 via-amber-400 to-rose-500" />
+
+                <div className="flex justify-between items-center pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-lg">
+                      <PlusCircle className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <h4 className="text-xs font-black text-emerald-400 uppercase tracking-widest">
+                        Lançar Desafio de Lance Real
+                      </h4>
+                      <p className="text-[10px] text-slate-500">Crie palpites de lances para rodar os copos</p>
+                    </div>
+                  </div>
                   <button
                     onClick={() => setCreatingBet(false)}
-                    className="text-xs text-slate-500 hover:text-slate-300"
+                    className="text-[11px] bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white py-1 px-2.5 rounded-lg border border-slate-800 transition cursor-pointer font-bold focus:outline-none"
                   >
-                    Cancelar
+                    Fechar
                   </button>
                 </div>
 
                 <form onSubmit={handleCreateBet} className="space-y-4">
                   {/* Modelos Rápidos */}
-                  <div className="bg-slate-900/60 p-3.5 rounded-xl border border-slate-800 space-y-2">
-                    <span className="block text-[10px] font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
-                      Sugestões de Palpites (Modelos Rápidos):
+                  <div className="bg-slate-900/40 p-3.5 rounded-xl border border-slate-800/80 space-y-2.5">
+                    <span className="block text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 text-amber-400">
+                      <Sparkles className="w-3.5 h-3.5 animate-pulse" />
+                      Sugestões Rápidas:
                     </span>
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-1.5 flex-wrap">
                       {FOOTBALL_BET_TEMPLATES.map((tmpl, idx) => (
                         <button
                           key={`template_${idx}`}
@@ -743,7 +786,7 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                             setBetValue(tmpl.value);
                             setBetDuration(tmpl.duration);
                           }}
-                          className="bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-400 text-[10px] font-extrabold px-2.5 py-1.5 rounded-lg transition"
+                          className="bg-slate-950 hover:bg-emerald-950/40 border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-emerald-400 text-[10px] font-bold px-2.5 py-1.5 rounded-lg transition"
                         >
                           {tmpl.label}
                         </button>
@@ -751,75 +794,115 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                     </div>
                   </div>
 
+                  {/* Pergunta do Palpite */}
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                      O que vai acontecer? (Pergunta do Palpite)
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider">
+                      Pergunta / O que vai acontecer?
                     </label>
                     <input
                       type="text"
                       value={betTitle}
                       onChange={(e) => setBetTitle(e.target.value)}
-                      placeholder="Ex: Neymar vai cobrar falta?"
-                      className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-white text-sm outline-none"
+                      placeholder="Ex: Neymar vai chutar na trave nesse lance?"
+                      className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/65 rounded-xl px-4 py-3 text-white text-xs outline-none transition"
                       maxLength={60}
                       required
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Alternativas de voto */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider">
+                      Opções de Resposta (separadas por vírgula)
+                    </label>
+                    <input
+                      type="text"
+                      value={betOptionsString}
+                      onChange={(e) => setBetOptionsString(e.target.value)}
+                      placeholder="Sim, Não, Só na trave"
+                      className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500/65 rounded-xl px-4 py-3 text-white text-xs outline-none transition"
+                      required
+                    />
+                    <span className="text-[9px] text-slate-500 block mt-1">
+                      Mínimo de 2 opções. Separe usando vírgulas (ex: "Casa, Visitante, Empate").
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Contrato: Valor em Doses */}
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                        Opções (Separadas por vírgula)
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider">
+                        Contrato: Quantas Doses Vale? 🥃
                       </label>
-                      <input
-                        type="text"
-                        value={betOptionsString}
-                        onChange={(e) => setBetOptionsString(e.target.value)}
-                        placeholder="Sim, Não, Só no travessão"
-                        className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-white text-xs outline-none"
-                        required
-                      />
+                      <div className="grid grid-cols-4 gap-2">
+                        {[1, 2, 3, 5].map((val) => {
+                          const labels: Record<number, string> = {
+                            1: "Manso",
+                            2: "Aquecer",
+                            3: "Brutal 💥",
+                            5: "Supremo 🔥",
+                          };
+                          const isSelected = betValue === val;
+                          return (
+                            <button
+                              key={`stake_${val}`}
+                              type="button"
+                              onClick={() => setBetValue(val)}
+                              className={`p-2 rounded-xl text-center border transition cursor-pointer flex flex-col items-center justify-center gap-1 ${
+                                isSelected
+                                  ? "bg-amber-500/10 border-amber-500 text-amber-400 font-black shadow-lg"
+                                  : "bg-slate-900 border-slate-800 text-slate-300 hover:bg-slate-850"
+                              }`}
+                            >
+                              <span className="text-xs font-black">{val} {val === 1 ? "Dose" : "Doses"}</span>
+                              <span className="text-[8px] text-slate-500 font-medium block">{labels[val]}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
+
+                    {/* Tempo Limite */}
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                        Contrato: Valor em Doses 🥃
+                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider">
+                        ⏱️ Tempo Limite para Votar
                       </label>
-                      <select
-                        value={betValue}
-                        onChange={(e) => setBetValue(parseInt(e.target.value))}
-                        className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-white text-xs outline-none"
-                      >
-                        <option value={1}>1 Dose (Manso)</option>
-                        <option value={2}>2 Doses (Aquecimento)</option>
-                        <option value={3}>3 Doses (Brutal! 💥)</option>
-                        <option value={5}>5 Doses (Vira-Vira Supremo! 🔥)</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
-                        ⏱️ Tempo Limite para Apostar
-                      </label>
-                      <select
-                        value={betDuration}
-                        onChange={(e) => setBetDuration(parseInt(e.target.value))}
-                        className="w-full bg-slate-900 border border-slate-800 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-white text-xs outline-none"
-                      >
-                        <option value={0}>Sem limite</option>
-                        <option value={30}>30 segundos</option>
-                        <option value={60}>1 minuto</option>
-                        <option value={120}>2 minutos</option>
-                        <option value={180}>3 minutos</option>
-                        <option value={300}>5 minutos</option>
-                        <option value={600}>10 minutos</option>
-                      </select>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[0, 30, 60, 120, 180, 300, 600].map((dur) => {
+                          const labels: Record<number, string> = {
+                            0: "Sem limite",
+                            30: "30s",
+                            60: "1m",
+                            120: "2m",
+                            180: "3m",
+                            300: "5m",
+                            650: "10m",
+                          };
+                          const isSelected = betDuration === dur;
+                          return (
+                            <button
+                              key={`dur_${dur}`}
+                              type="button"
+                              onClick={() => setBetDuration(dur)}
+                              className={`px-2.5 py-2 rounded-lg text-center text-[10px] border transition cursor-pointer font-bold ${
+                                isSelected
+                                  ? "bg-emerald-500/10 border-emerald-500 text-emerald-400 font-extrabold"
+                                  : "bg-slate-900 border-slate-800 text-slate-400 hover:bg-slate-850 hover:text-slate-300"
+                              }`}
+                            >
+                              {labels[dur]}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 
                   <button
                     type="submit"
-                    className="w-full bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2.5 rounded-xl text-xs uppercase cursor-pointer"
+                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-slate-950 font-black py-3 rounded-xl text-xs uppercase tracking-wider cursor-pointer shadow-lg active:scale-[0.99] transition"
                   >
-                    Divulgar Aposta do Lance!
+                    Divulgar Desafio na Mesa! 🚀
                   </button>
                 </form>
               </motion.div>
@@ -827,11 +910,11 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
 
             {/* List of active/resolved bets */}
             {bets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-center text-slate-500 bg-slate-950 rounded-2xl border border-slate-800/50">
-                <Trophy className="w-8 h-8 text-slate-700 mb-2" />
-                <h4 className="font-bold text-slate-300 text-sm">Sem apostas lançadas</h4>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  O criador da sala pode lançar palpites de lances reais para rodar a mesa!
+              <div className="flex flex-col items-center justify-center py-16 text-center text-slate-500 bg-slate-950 rounded-2xl border border-slate-800/50">
+                <Trophy className="w-10 h-10 text-slate-700 mb-2.5 animate-bounce" />
+                <h4 className="font-extrabold text-slate-300 text-sm">Sem palpites ativos de momento</h4>
+                <p className="text-[11px] text-slate-500 max-w-sm mt-1 mx-auto px-4">
+                  Qualquer pessoa na mesa pode lançar um novo palpite para agitar os amigos e começar as rodadas de dose!
                 </p>
               </div>
             ) : (
@@ -840,59 +923,82 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                   const hasVoted = bet.votes && bet.votes[user.uid] !== undefined;
                   const myVote = hasVoted ? bet.votes[user.uid] : null;
 
+                  const secs = getRemainingCalculatedSecs(bet.endsAt);
+                  const isExpired = bet.status === "open" && secs !== null && secs <= 0;
+                  const isLocked = isExpired;
+                  const isClosed = bet.status === "resolved";
+
+                  const isMyOwnBet = bet.creatorId === user.uid;
+                  const hasRights = isCreator || isMyOwnBet;
+
                   return (
                     <div
                       key={bet.id}
-                      className={`border rounded-2xl p-4 md:p-5 flex flex-col justify-between transition ${
-                        bet.status === "open"
-                          ? "bg-slate-950 border-emerald-500/10 hover:border-emerald-500/20"
-                          : "bg-slate-950/60 border-slate-800/80 grayscale opacity-85"
+                      className={`border rounded-2xl p-4 md:p-5 flex flex-col justify-between transition-all duration-300 ${
+                        isClosed
+                          ? "bg-slate-950/40 border-slate-900/60 opacity-60 grayscale"
+                          : isLocked
+                          ? "bg-slate-950 border-amber-500/10 shadow-md"
+                          : "bg-slate-950 border-slate-800/80 hover:border-slate-800 hover:shadow-lg shadow-lg"
                       }`}
                     >
-                      <div className="flex justify-between items-start gap-4 mb-3">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 mb-3">
                         <div>
-                          <span className="text-[9px] bg-slate-900 border border-slate-800 text-amber-400 font-bold px-2 py-0.5 rounded uppercase">
-                            🔥 Vale {bet.betValue} {bet.betValue === 1 ? "Dose" : "Doses"}
-                          </span>
-                          <h4 className="text-sm font-bold text-white mt-1 border-b border-transparent">
+                          {/* Top Badges */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[9px] bg-slate-900 border border-slate-800 text-amber-400 font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider">
+                              🥃 Vale {bet.betValue} {bet.betValue === 1 ? "Dose" : "Doses"}
+                            </span>
+                            <span className="text-[9px] bg-slate-900/80 border border-slate-800/50 text-slate-400 px-2.5 py-0.5 rounded-md font-mono shrink-0">
+                              Lançado por: <strong className="text-emerald-400">{isMyOwnBet ? "Você" : (bet.creatorName || "Brother")}</strong>
+                            </span>
+                          </div>
+                          
+                          <h4 className="text-sm font-extrabold text-white mt-1.5 leading-snug">
                             {bet.title}
                           </h4>
                         </div>
-                        {bet.status === "open" ? (
-                          <div className="flex flex-col items-end gap-1">
-                            {bet.endsAt ? (() => {
-                              const secs = getRemainingCalculatedSecs(bet.endsAt);
-                              if (secs !== null && secs <= 0) {
+
+                        {/* Status / Live Timer Indicator */}
+                        <div className="shrink-0">
+                          {isClosed ? (
+                            <span className="text-[10px] text-slate-400 bg-slate-900/80 px-2.5 py-1 rounded-md border border-slate-800/50 font-bold block text-center">
+                              Finalizado ✅
+                            </span>
+                          ) : isLocked ? (
+                            <span className="text-[10px] text-red-400 bg-red-500/10 px-2.5 py-1 rounded-md border border-red-500/10 font-black flex items-center justify-center gap-1">
+                              <Lock className="w-3 h-3 text-red-400" /> Palpites Trancados 🔒
+                            </span>
+                          ) : (
+                            <div>
+                              {bet.endsAt ? (() => {
+                                if (secs !== null && secs <= 0) {
+                                  return (
+                                    <span className="text-[10px] text-red-400 bg-red-500/10 px-2.5 py-1 rounded-md border border-red-500/10 font-bold flex items-center justify-center gap-1">
+                                      <Lock className="w-3 h-3 text-red-500" /> Palpites Trancados 🔒
+                                    </span>
+                                  );
+                                }
+                                const m = Math.floor((secs || 0) / 60);
+                                const s = (secs || 0) % 65;
                                 return (
-                                  <span className="text-[10px] text-red-400 bg-red-500/10 px-2 py-0.5 rounded font-extrabold flex items-center gap-1">
-                                    <Lock className="w-3 h-3 text-red-400" /> Encerrado
+                                  <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-md border border-amber-500/20 font-black flex items-center justify-center gap-1 font-mono animate-pulse font-bold">
+                                    <Clock className="w-3 h-3 text-amber-400 animate-spin" /> {m}:{s < 10 ? `0${s}` : s}
                                   </span>
                                 );
-                              }
-                              const m = Math.floor((secs || 0) / 60);
-                              const s = (secs || 0) % 60;
-                              return (
-                                <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded font-black flex items-center gap-1 font-mono animate-pulse">
-                                  <Clock className="w-3 h-3 text-amber-400 animate-spin" /> {m}:{s < 10 ? `0${s}` : s}
+                              })() : (
+                                <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-2.5 py-1 rounded-md border border-emerald-500/25 font-extrabold animate-pulse block text-center">
+                                  Aberto para Votos 🟢
                                 </span>
-                              );
-                            })() : (
-                              <span className="text-[10px] text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded font-medium animate-pulse">
-                                Aberto
-                              </span>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-[10px] text-slate-500 bg-slate-800 px-2 py-0.5 rounded font-medium">
-                            Resolvido
-                          </span>
-                        )}
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
 
                       {/* Vote Buttons / Selection Option list */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
                         {bet.options.map((option, index) => {
-                          // Quick vote analytics
                           const totalVotes = Object.keys(bet.votes || {}).length;
                           const optionVotes = Object.values(bet.votes || {}).filter(
                             (v) => v === index
@@ -900,44 +1006,47 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                           const pct = totalVotes > 0 ? Math.round((optionVotes / totalVotes) * 100) : 0;
 
                           const isSelected = myVote === index;
-                          const isWinner = bet.status === "resolved" && bet.winnerOption === index;
-
-                          const secs = getRemainingCalculatedSecs(bet.endsAt);
-                          const isExpired = bet.status === "open" && secs !== null && secs <= 0;
-                          const isDisabled = bet.status === "resolved" || isExpired;
+                          const isWinner = isClosed && bet.winnerOption === index;
+                          const isDisabled = isClosed || isLocked;
 
                           return (
                             <button
                               key={`${bet.id}_opt_${index}`}
                               disabled={isDisabled}
                               onClick={() => handleVote(bet.id, index)}
-                              className={`relative overflow-hidden w-full text-left p-3 rounded-xl border text-xs font-medium transition flex items-center justify-between ${
+                              className={`relative overflow-hidden w-full text-left p-3.5 rounded-xl border text-xs font-semibold transition duration-205 flex items-center justify-between group ${
                                 isWinner
-                                  ? "bg-amber-500/10 border-amber-400 text-amber-400 font-bold"
+                                  ? "bg-amber-500/10 border-amber-400 text-amber-400 font-black scale-[1.01]"
                                   : isSelected
-                                  ? "bg-emerald-950 border-emerald-500 text-emerald-400 font-bold"
-                                  : isExpired
-                                  ? "bg-slate-950/40 border-dashed border-slate-900 text-slate-600 cursor-not-allowed"
-                                  : "bg-slate-900 border-transparent text-slate-300 hover:bg-slate-900/80 cursor-pointer"
+                                  ? "bg-emerald-950/60 border-emerald-500 text-emerald-400 font-black"
+                                  : isDisabled
+                                  ? "bg-slate-950/20 border-slate-900 text-slate-500 cursor-not-allowed"
+                                  : "bg-slate-900 border-slate-800/40 text-slate-300 hover:bg-slate-850 hover:text-white cursor-pointer"
                               }`}
                             >
                               {/* Background progress fill overlay */}
                               <div
-                                className="absolute left-0 top-0 bottom-0 bg-slate-800/10 -z-10 transition-all duration-500"
+                                className={`absolute left-0 top-0 bottom-0 -z-10 transition-all duration-700 ease-out ${
+                                  isWinner
+                                    ? "bg-amber-400/10"
+                                    : isSelected
+                                    ? "bg-emerald-500/10"
+                                    : "bg-slate-800/15"
+                                }`}
                                 style={{ width: `${pct}%` }}
                               />
 
                               <div className="flex items-center gap-2">
                                 {isSelected && (
-                                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
                                 )}
-                                {isExpired && !isSelected && (
-                                  <Lock className="w-3 h-3 text-slate-600" />
+                                {isClosed && !isWinner && (
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-700" />
                                 )}
                                 <span>{option}</span>
                               </div>
 
-                              <span className="text-[10px] text-slate-500 font-mono">
+                              <span className="text-[10px] text-slate-400 font-mono group-hover:text-slate-200 transition">
                                 {optionVotes} {optionVotes === 1 ? 'voto' : 'votos'} ({pct}%)
                               </span>
                             </button>
@@ -945,22 +1054,45 @@ export default function ActiveRoom({ roomId, user, onBack }: ActiveRoomProps) {
                         })}
                       </div>
 
-                      {/* Resolver Area for creator */}
-                      {isCreator && bet.status === "open" && (
-                        <div className="mt-4 pt-3 border-t border-slate-900 flex flex-col md:flex-row justify-between items-center gap-3 bg-slate-900/40 p-2.5 rounded-xl">
-                          <span className="text-[10px] text-slate-400 font-medium">
-                            🚩 Declare o vencedor do lance real para cobrar as bebidas:
-                          </span>
-                          <div className="flex gap-1.5 flex-wrap">
-                            {bet.options.map((option, index) => (
+                      {/* Resolver & Lock Area for the bet creator / room administrator */}
+                      {hasRights && !isClosed && (
+                        <div className="mt-4 pt-3.5 border-t border-slate-900 flex flex-col lg:flex-row justify-between items-center gap-3 bg-slate-900/20 p-3 rounded-xl border border-slate-800/40">
+                          <div className="flex flex-col text-left self-start lg:self-auto">
+                            <span className="text-[10px] font-black text-amber-400 uppercase tracking-wide">
+                              Gerenciador do Seu Palpite 🛠️
+                            </span>
+                            <span className="text-[9px] text-slate-400">
+                              Tranque palpites antes do lance ou selecione o ganhador da rodada:
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap self-end lg:self-auto">
+                            {/* Early Lock button */}
+                            {!isLocked && (
                               <button
-                                key={`res_${bet.id}_${index}`}
-                                onClick={() => handleResolveBet(bet, index)}
-                                className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-[10px] py-1 px-2.5 rounded-lg transition"
+                                onClick={() => handleLockBet(bet.id)}
+                                className="bg-slate-950 hover:bg-rose-950/80 hover:text-rose-400 text-slate-300 border border-slate-850 hover:border-rose-500/20 font-black text-[10px] py-1.5 px-3 rounded-lg transition duration-150 cursor-pointer flex items-center gap-1"
+                                title="Fechar votação agora mesmo! Útil se a jogada começou antes do cronômetro expirar."
                               >
-                                {option} Venceu
+                                <Lock className="w-3 h-3" />
+                                <span>Trancar Apostas 🔒</span>
                               </button>
-                            ))}
+                            )}
+
+                            {/* Options to settle/declare winner */}
+                            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-850/80">
+                              <span className="text-[8px] text-slate-500 font-black uppercase px-2 font-mono">Venceu:</span>
+                              {bet.options.map((option, index) => (
+                                <button
+                                  key={`res_${bet.id}_${index}`}
+                                  onClick={() => handleResolveBet(bet, index)}
+                                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-black text-[10px] py-1 px-2.5 rounded-md transition cursor-pointer"
+                                  title={`Declarar "${option}" como a resposta correta e cobrar os errados!`}
+                                >
+                                  {option}
+                                </button>
+                              ))}
+                            </div>
                           </div>
                         </div>
                       )}
