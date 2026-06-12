@@ -7,13 +7,15 @@ import AuthScreen from "./components/AuthScreen";
 import ProfileSetup from "./components/ProfileSetup";
 import LobbiesHub from "./components/LobbiesHub";
 import ActiveRoom from "./components/ActiveRoom";
-import { LogOut, Beer, Heart } from "lucide-react";
+import TutorialWizard from "./components/TutorialWizard";
+import { LogOut, Beer, Heart, HelpCircle } from "lucide-react";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingProfile, setCheckingProfile] = useState(true);
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
   
   // Persist activeRoomId in localStorage so reloading the page does not boot the user out of the active room
   const [activeRoomId, setActiveRoomIdState] = useState<string | null>(() => {
@@ -28,6 +30,15 @@ export default function App() {
       localStorage.removeItem("chutegole_active_room_id");
     }
   };
+
+  useEffect(() => {
+    if (profile) {
+      const completed = localStorage.getItem("chutegole_tutorial_completed");
+      if (!completed) {
+        setIsTutorialOpen(true);
+      }
+    }
+  }, [profile]);
 
   useEffect(() => {
     // Validate Firestore connection on boot
@@ -107,7 +118,7 @@ export default function App() {
           </div>
 
           {profile && (
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 md:gap-4">
               <div className="hidden sm:flex items-center gap-2.5 bg-slate-950 px-3.5 py-1.5 rounded-full border border-slate-800">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 <span className="text-xs text-slate-200 font-bold">{profile.displayName}</span>
@@ -115,6 +126,15 @@ export default function App() {
                   {profile.favoriteTeam}
                 </span>
               </div>
+              
+              <button
+                onClick={() => setIsTutorialOpen(true)}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500/10 to-orange-500/10 hover:from-amber-500/20 hover:to-orange-500/20 text-amber-400 text-xs font-bold py-1.5 px-3.5 rounded-xl border border-amber-500/20 cursor-pointer shadow-md transition duration-200"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>Como Jogar?</span>
+              </button>
+
               <button
                 onClick={handleLogout}
                 className="flex items-center gap-1.5 bg-rose-950/20 text-rose-400 hover:bg-rose-950 text-xs font-bold py-1.5 px-3 rounded-xl border border-rose-500/10 hover:border-rose-500/25 transition cursor-pointer"
@@ -162,6 +182,15 @@ export default function App() {
           </p>
         </div>
       </footer>
+
+      {/* Interactive Onboarding Tutorial Walkthrough */}
+      <TutorialWizard
+        isOpen={isTutorialOpen}
+        onClose={() => {
+          setIsTutorialOpen(false);
+          localStorage.setItem("chutegole_tutorial_completed", "true");
+        }}
+      />
     </div>
   );
 }
